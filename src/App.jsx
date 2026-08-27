@@ -117,11 +117,11 @@ function App() {
       <header className="encabezado">
 
         <h1>
-          LA GUÍA DEL BARRIO
+          Talentosos Somos Todos 
         </h1>
 
         <p>
-          El talento y los servicios de la comunidad a tu alcance
+          Negocios y servicios de la comunidad a tu alcance
         </p>
 
       </header>
@@ -213,11 +213,11 @@ function App() {
       <footer>
 
         <p>
-          La Guia del Barrio
+          Talentosos Somos Todos
         </p>
 
         <p>
-          Directorio de servicios y negocios
+          Directorio de Oportunidades, Comercio y Emprendimiento
         </p>
 
       </footer>
