@@ -772,9 +772,8 @@ function Destacados({
         "tu negocio";
 
       const mensaje =
-        `Hola ${nombre}, encontré tu servicio ` +
-        `en Conecta El Rocío. ` +
-        `Quisiera información sobre tu servicio.`;
+  `Hola, encontré tu negocio en Talentosos Somos Todos ` +
+  `y me gustaría obtener más información sobre tus servicios o emprendimiento.`;
 
       window.open(
         `https://wa.me/${numero}?text=${encodeURIComponent(
