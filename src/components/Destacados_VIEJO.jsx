@@ -2,9 +2,8 @@ import { useState, useEffect } from "react";
 import negociosIniciales from "../data/negocios";
 import { supabase } from "../supabase";
 
-function obtenerNegocios() {
-  const guardados =
-    localStorage.getItem("negociosConecta");
+function obtenerNegociosLocales() {
+  const guardados = localStorage.getItem("negociosConecta");
 
   if (guardados) {
     try {
@@ -15,6 +14,45 @@ function obtenerNegocios() {
   }
 
   return negociosIniciales;
+}
+
+async function cargarNegociosSupabase() {
+  const { data, error } = await supabase
+    .from("negocios")
+    .select("*")
+    .order("id", { ascending: true });
+
+  if (error) {
+    console.error("Error al cargar negocios desde Supabase:", error);
+    return obtenerNegociosLocales();
+  }
+
+  return (data || []).map((item) => ({
+    nombreNegocio: item.nombre_negocio || "",
+    responsable: item.responsable || "",
+    nombre:
+      item.nombre_negocio ||
+      item.responsable ||
+      "",
+    grupo: item.grupo || "Técnicos",
+    especialidad: item.especialidades || "",
+    especialidades:
+      typeof item.especialidades === "string"
+        ? item.especialidades
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean)
+        : [],
+    otroEspecialidad: item.otro_especialidad || "",
+    descripcion: item.descripcion || "",
+    barrio: item.barrio || "",
+    tipoAtencion: item.tipo_atencion || "Domicilio",
+    direccion: item.direccion || "",
+    telefono: item.telefono || "",
+    horario: item.horario || {},
+    festivos: item.festivos_data || item.festivos || "No atiende",
+    horarioFestivos: item.horario_festivos || ""
+  }));
 }
 
 function normalizar(texto) {
@@ -523,7 +561,9 @@ function Destacados({
   const [
     listaNegocios,
     setListaNegocios
-  ] = useState([]);
+  ] = useState(
+    obtenerNegocios()
+  );
 
   const [
     especialidadSeleccionada,
@@ -541,96 +581,23 @@ function Destacados({
   ] = useState(false);
 
   useEffect(() => {
-    const cargarNegocios = async () => {
-      const { data, error } = await supabase
-        .from("negocios")
-        .select("*")
-        .order("id", { ascending: true });
 
-      if (error) {
-        console.error(
-          "Error al cargar negocios desde Supabase:",
-          error
-        );
+    setListaNegocios(
+      obtenerNegocios()
+    );
 
-        setListaNegocios(
-          obtenerNegocios()
-        );
+    setEspecialidadSeleccionada(
+      ""
+    );
 
-        return;
-      }
+    setNegocioSeleccionado(
+      null
+    );
 
-      const negocios = (data || []).map(
-        (item) => ({
-          nombreNegocio:
-            item.nombre_negocio || "",
+    setMostrarHorario(
+      false
+    );
 
-          responsable:
-            item.responsable || "",
-
-          nombre:
-            item.nombre_negocio ||
-            item.responsable ||
-            "",
-
-          grupo:
-            item.grupo ||
-            "Técnicos",
-
-          especialidad:
-            item.especialidades || "",
-
-          especialidades:
-            typeof item.especialidades ===
-            "string"
-              ? item.especialidades
-                  .split(",")
-                  .map((item) =>
-                    item.trim()
-                  )
-                  .filter(Boolean)
-              : [],
-
-          otroEspecialidad:
-            item.otro_especialidad || "",
-
-          descripcion:
-            item.descripcion || "",
-
-          barrio:
-            item.barrio || "",
-
-          tipoAtencion:
-            item.tipo_atencion ||
-            "Domicilio",
-
-          direccion:
-            item.direccion || "",
-
-          telefono:
-            item.telefono || "",
-
-          horario:
-            item.horario || {},
-
-          festivos:
-            item.festivos_data ||
-            item.festivos ||
-            "No atiende",
-
-          horarioFestivos:
-            item.horario_festivos || ""
-        })
-      );
-
-      setListaNegocios(negocios);
-    };
-
-    cargarNegocios();
-
-    setEspecialidadSeleccionada("");
-    setNegocioSeleccionado(null);
-    setMostrarHorario(false);
   }, [
     grupoSeleccionado,
     busqueda
@@ -844,7 +811,8 @@ function Destacados({
         "tu negocio";
 
       const mensaje =
-        `Hola, encontré tu negocio en Talentosos Somos Todos y me gustaría obtener más información sobre tus servicios.`;
+  `Hola, encontré tu negocio en Talentosos Somos Todos ` +
+  `y me gustaría obtener más información sobre tus servicios o emprendimiento.`;
 
       window.open(
         `https://wa.me/${numero}?text=${encodeURIComponent(

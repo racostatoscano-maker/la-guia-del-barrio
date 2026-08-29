@@ -443,6 +443,9 @@ function Admin() {
       );
     };
 
+  
+  
+  setNegocios(lista);
 const guardarLista = async (lista) => {
   localStorage.setItem(
     "negociosConecta",
