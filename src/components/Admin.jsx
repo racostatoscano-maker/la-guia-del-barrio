@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import negociosIniciales from "../data/negocios";
 
@@ -167,6 +167,17 @@ function horarioTexto(horario, dia) {
 
 function prepararNegocio(item) {
   const horario = item.horario || {};
+  const nombreNegocio = item.nombreNegocio ?? item.nombre_negocio ?? "";
+  const responsable = item.responsable ?? item.nombre ?? "";
+  const grupo = item.grupo ?? "Técnicos";
+  const especialidadPrincipal = item.especialidad ?? "";
+  const especialidadesGuardadas = item.especialidades ?? "";
+  const otroEspecialidad = item.otroEspecialidad ?? item.otro_especialidad ?? "";
+  const tipoAtencion = item.tipoAtencion ?? item.tipo_atencion ?? "Domicilio";
+  const direccion = item.direccion ?? "";
+  const telefono = item.telefono ?? "";
+  const descripcion = item.descripcion ?? "";
+  const barrio = item.barrio ?? "";
 
   const lunes =
     horarioTexto(horario, "lunes");
@@ -258,60 +269,51 @@ function prepararNegocio(item) {
 
   let especialidades = [];
 
-  if (Array.isArray(item.especialidades)) {
-    especialidades =
-      item.especialidades;
-  } else if (item.especialidad) {
-    especialidades =
-      String(item.especialidad)
-        .split(",")
-        .map((especialidad) =>
-          especialidad.trim()
-        )
-        .filter(Boolean);
+  if (Array.isArray(especialidadesGuardadas)) {
+    especialidades = especialidadesGuardadas;
+  } else if (especialidadesGuardadas) {
+    especialidades = String(especialidadesGuardadas)
+      .split(",")
+      .map((especialidad) => especialidad.trim())
+      .filter(Boolean);
+  } else if (especialidadPrincipal) {
+    especialidades = String(especialidadPrincipal)
+      .split(",")
+      .map((especialidad) => especialidad.trim())
+      .filter(Boolean);
   }
 
   return {
-    nombreNegocio:
-      item.nombreNegocio || "",
+    id: item.id ?? null,
 
-    responsable:
-      item.responsable ||
-      item.nombre ||
-      "",
+    nombreNegocio,
+
+    responsable,
 
     nombre:
-      item.nombre ||
-      item.nombreNegocio ||
-      item.responsable ||
+      item.nombre ??
+      nombreNegocio ??
+      responsable ??
       "",
 
-    grupo:
-      item.grupo || "Técnicos",
+    grupo,
 
     especialidad:
-      item.especialidad || "",
+      especialidadPrincipal,
 
     especialidades,
 
-    otroEspecialidad:
-      item.otroEspecialidad || "",
+    otroEspecialidad,
 
-    descripcion:
-      item.descripcion || "",
+    descripcion,
 
-    barrio:
-      item.barrio || "",
+    barrio,
 
-    tipoAtencion:
-      item.tipoAtencion ||
-      "Domicilio",
+    tipoAtencion,
 
-    direccion:
-      item.direccion || "",
+    direccion,
 
     telefono:
-      item.telefono || "",
 
     lunesViernes,
 
@@ -333,127 +335,42 @@ function prepararNegocio(item) {
     horarioFestivos
   };
 }
+function filaSupabaseANegocio(item) {
+  return prepararNegocio({
+    id: item.id,
+    nombre_negocio: item.nombre_negocio,
+    responsable: item.responsable,
+    grupo: item.grupo,
+    especialidades: item.especialidades,
+    otro_especialidad: item.otro_especialidad,
+    descripcion: item.descripcion,
+    barrio: item.barrio,
+    tipo_atencion: item.tipo_atencion,
+    direccion: item.direccion,
+    telefono: item.telefono,
+    horario: item.horario || {},
+    festivos:
+      item.festivos_data ||
+      item.festivos ||
+      "No atiende",
+  });
+}
 
-function Admin() {
-  const obtenerNegocios = () => {
-    const guardados =
-      localStorage.getItem(
-        "negociosConecta"
-      );
+function construirDatosSupabase(item) {
+  let festivosGuardados = "No atiende";
 
-    if (guardados) {
-      try {
-        const lista =
-          JSON.parse(guardados);
-
-        return lista.map(
-          (item) =>
-            prepararNegocio(item)
-        );
-      } catch {
-        return negociosIniciales.map(
-          (item) =>
-            prepararNegocio(item)
-        );
-      }
-    }
-
-    const listaInicial =
-      negociosIniciales.map(
-        (item) =>
-          prepararNegocio(item)
-      );
-
-    localStorage.setItem(
-      "negociosConecta",
-      JSON.stringify(
-        listaInicial
-      )
-    );
-
-    return listaInicial;
-  };
-
-  const [negocios, setNegocios] =
-    useState(obtenerNegocios());
-
-  const [pantalla, setPantalla] =
-    useState("menu");
-
-  const [editando, setEditando] =
-    useState(null);
-
-  const [textoBuscar, setTextoBuscar] =
-    useState("");
-
-  const [negocio, setNegocio] =
-    useState(formularioVacio);
-
-  const cambiarDato = (e) => {
-    const {
-      name,
-      value
-    } = e.target;
-
-    if (name === "grupo") {
-      setNegocio({
-        ...negocio,
-        grupo: value,
-        especialidad: "",
-        especialidades: [],
-        otroEspecialidad: ""
-      });
-
-      return;
-    }
-
-    setNegocio({
-      ...negocio,
-      [name]: value
-    });
-  };
-
-  const cambiarEspecialidad =
-    (especialidad) => {
-
-      setNegocio(
-        (anterior) => {
-
-          const yaExiste =
-            anterior.especialidades.includes(
-              especialidad
-            );
-
-          return {
-            ...anterior,
-
-            especialidades:
-              yaExiste
-                ? anterior.especialidades.filter(
-                    (item) =>
-                      item !==
-                      especialidad
-                  )
-                : [
-                    ...anterior.especialidades,
-                    especialidad
-                  ]
-          };
-        }
-      );
+  if (item.festivos === "Atiende") {
+    festivosGuardados = {
+      atiende: true,
+      horario: convertirHorario(item.horarioFestivos),
     };
+  }
 
-const guardarLista = async (lista) => {
-  localStorage.setItem(
-    "negociosConecta",
-    JSON.stringify(lista)
-  );
+  const horarioLunesViernes = convertirHorario(item.lunesViernes);
 
-  setNegocios(lista);
-
-  const datosSupabase = lista.map((item) => ({
-    nombre_negocio: item.nombre || "",
-    responsable: item.responsable || item.nombre || "",
+  return {
+    nombre_negocio: item.nombreNegocio || "",
+    responsable: item.responsable || "",
     grupo: item.grupo || "",
     especialidades: Array.isArray(item.especialidades)
       ? item.especialidades.join(", ")
@@ -462,1016 +379,343 @@ const guardarLista = async (lista) => {
     descripcion: item.descripcion || "",
     barrio: item.barrio || "",
     tipo_atencion: item.tipoAtencion || "",
-    direccion: item.direccion || "",
+    direccion:
+      item.tipoAtencion === "Domicilio"
+        ? ""
+        : item.direccion || "",
     telefono: item.telefono || "",
     lunes_viernes: item.lunesViernes || "",
     sabado: item.sabado || "",
     domingo: item.domingo || "",
-    festivos:
-      typeof item.festivos === "string"
-        ? item.festivos
-        : "Atiende",
+    festivos: item.festivos || "No atiende",
     horario_festivos: item.horarioFestivos || "",
-    horario: item.horario || {},
-    festivos_data:
-      typeof item.festivos === "object"
-        ? item.festivos
-        : {}
-  }));
+    horario: {
+      lunes: horarioLunesViernes,
+      martes: horarioLunesViernes,
+      miercoles: horarioLunesViernes,
+      jueves: horarioLunesViernes,
+      viernes: horarioLunesViernes,
+      sabado: convertirHorario(item.sabado),
+      domingo: convertirHorario(item.domingo),
+    },
+    festivos_data: festivosGuardados,
+  };
+}
 
-  const { error: errorEliminar } = await supabase
-    .from("negocios")
-    .delete()
-    .neq("id", 0);
+function Admin() {
+  const [negocios, setNegocios] = useState([]);
+  const [pantalla, setPantalla] = useState("menu");
+  const [editando, setEditando] = useState(null);
+  const [textoBuscar, setTextoBuscar] = useState("");
+  const [negocio, setNegocio] = useState(formularioVacio);
+  const [cargando, setCargando] = useState(true);
 
-  if (errorEliminar) {
-    console.error(errorEliminar);
-    alert("No se pudo actualizar la base de datos.");
-    return;
-  }
+  const cargarNegocios = async () => {
+    setCargando(true);
+    const { data, error } = await supabase
+      .from("negocios")
+      .select("*")
+      .order("id", { ascending: true });
 
-  const { error: errorInsertar } = await supabase
-    .from("negocios")
-    .insert(datosSupabase);
+    if (error) {
+      console.error("Error al cargar negocios desde Supabase:", error);
+      alert("No se pudieron cargar los negocios desde la nube.");
+      setCargando(false);
+      return false;
+    }
 
-  if (errorInsertar) {
-    console.error(errorInsertar);
-    alert("Hubo un problema al guardar en la nube.");
-    return;
-  }
+    setNegocios((data || []).map(filaSupabaseANegocio));
+    setCargando(false);
+    return true;
+  };
 
-  console.log("Negocios guardados correctamente en Supabase");
-};
+  useEffect(() => {
+    cargarNegocios();
+  }, []);
+
+  const cambiarDato = (e) => {
+    const { name, value } = e.target;
+    if (name === "grupo") {
+      setNegocio({ ...negocio, grupo: value, especialidades: [], otroEspecialidad: "" });
+      return;
+    }
+    setNegocio({ ...negocio, [name]: value });
+  };
+
+  const cambiarEspecialidad = (especialidad) => {
+    setNegocio((anterior) => {
+      const yaExiste = anterior.especialidades.includes(especialidad);
+      return {
+        ...anterior,
+        especialidades: yaExiste
+          ? anterior.especialidades.filter((item) => item !== especialidad)
+          : [...anterior.especialidades, especialidad],
+      };
+    });
+  };
+
   const nuevoNegocio = () => {
-    setNegocio(
-      formularioVacio
-    );
-
+    setNegocio(formularioVacio);
     setEditando(null);
     setPantalla("formulario");
   };
 
-  const guardarNegocio = (e) => {
+  const guardarNegocio = async (e) => {
     e.preventDefault();
 
     if (!negocio.responsable.trim()) {
-      alert(
-        "Debes escribir el nombre de la persona o responsable."
-      );
+      alert("Debes escribir el nombre de la persona o responsable.");
+      return;
+    }
+    if (negocio.especialidades.length === 0) {
+      alert("Debes seleccionar al menos una especialidad.");
+      return;
+    }
+    if (negocio.especialidades.includes("Otro") && !negocio.otroEspecialidad.trim()) {
+      alert('Si seleccionas "Otro", escribe cuál es el servicio.');
       return;
     }
 
-    const especialidadesFinales = [
-      ...negocio.especialidades
-    ];
+    const nombreNegocio = negocio.nombreNegocio.trim();
+    const responsable = negocio.responsable.trim();
+    const datos = construirDatosSupabase({
+      ...negocio,
+      nombreNegocio,
+      responsable,
+      especialidades: negocio.especialidades,
+      otroEspecialidad: negocio.otroEspecialidad.trim(),
+      descripcion: negocio.descripcion.trim(),
+      barrio: negocio.barrio.trim(),
+      direccion: negocio.direccion.trim(),
+      telefono: negocio.telefono.trim(),
+    });
 
-    if (
-      negocio.especialidades.includes(
-        "Otro"
-      )
-    ) {
-      if (
-        !negocio.otroEspecialidad.trim()
-      ) {
-        alert(
-          'Si seleccionas "Otro", escribe cuál es el servicio.'
-        );
+    if (editando !== null && negocio.id) {
+      const { error } = await supabase
+        .from("negocios")
+        .update(datos)
+        .eq("id", negocio.id);
+
+      if (error) {
+        console.error(error);
+        alert("No se pudieron guardar los cambios en la nube.");
         return;
       }
-    }
-
-    if (
-      especialidadesFinales.length === 0
-    ) {
-      alert(
-        "Debes seleccionar al menos una especialidad."
-      );
-      return;
-    }
-
-    const horarioLunesViernes =
-      convertirHorario(
-        negocio.lunesViernes
-      );
-
-    let festivosGuardados =
-      "No atiende";
-
-    if (
-      negocio.festivos ===
-      "Atiende"
-    ) {
-      festivosGuardados = {
-        atiende: true,
-        horario:
-          convertirHorario(
-            negocio.horarioFestivos
-          )
-      };
-    }
-
-    const nombreNegocio =
-      negocio.nombreNegocio.trim();
-
-    const responsable =
-      negocio.responsable.trim();
-
-    const nombrePublico =
-      nombreNegocio ||
-      responsable;
-
-    const especialidadTexto =
-      especialidadesFinales.join(
-        ", "
-      );
-
-    const nuevo = {
-      nombreNegocio,
-
-      responsable,
-
-      nombre:
-        nombrePublico,
-
-      grupo:
-        negocio.grupo,
-
-      especialidad:
-        especialidadTexto,
-
-      especialidades:
-        especialidadesFinales,
-
-      otroEspecialidad:
-        negocio.otroEspecialidad.trim(),
-
-      descripcion:
-        negocio.descripcion.trim(),
-
-      barrio:
-        negocio.barrio.trim(),
-
-      tipoAtencion:
-        negocio.tipoAtencion,
-
-      direccion:
-        negocio.tipoAtencion ===
-        "Domicilio"
-          ? ""
-          : negocio.direccion.trim(),
-
-      telefono:
-        negocio.telefono.trim(),
-
-      horario: {
-        lunes:
-          horarioLunesViernes,
-
-        martes:
-          horarioLunesViernes,
-
-        miercoles:
-          horarioLunesViernes,
-
-        jueves:
-          horarioLunesViernes,
-
-        viernes:
-          horarioLunesViernes,
-
-        sabado:
-          convertirHorario(
-            negocio.sabado
-          ),
-
-        domingo:
-          convertirHorario(
-            negocio.domingo
-          )
-      },
-
-      festivos:
-        festivosGuardados
-    };
-
-    let nuevaLista;
-
-    if (editando !== null) {
-      nuevaLista =
-        [...negocios];
-
-      nuevaLista[editando] =
-        nuevo;
-
-      alert(
-        `"${nombrePublico}" fue actualizado correctamente.`
-      );
+      alert(`"${nombreNegocio || responsable}" fue actualizado correctamente.`);
     } else {
-      nuevaLista = [
-        ...negocios,
-        nuevo
-      ];
+      const { error } = await supabase.from("negocios").insert(datos);
 
-      alert(
-        `"${nombrePublico}" fue guardado correctamente.`
-      );
+      if (error) {
+        console.error(error);
+        alert("No se pudo registrar el negocio en la nube.");
+        return;
+      }
+      alert(`"${nombreNegocio || responsable}" fue guardado correctamente.`);
     }
 
-    guardarLista(
-      nuevaLista
-    );
-
-    setNegocio(
-      formularioVacio
-    );
-
+    await cargarNegocios();
+    setNegocio(formularioVacio);
     setEditando(null);
-
     setPantalla("lista");
   };
 
   const editarNegocio = (indice) => {
-    const seleccionado =
-      negocios[indice];
-
-    setNegocio(
-      prepararNegocio(
-        seleccionado
-      )
-    );
-
-    setEditando(indice);
-
-    setPantalla(
-      "formulario"
-    );
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth"
+    const seleccionado = negocios[indice];
+    setNegocio({
+      ...formularioVacio,
+      ...prepararNegocio(seleccionado),
+      id: seleccionado?.id ?? null,
     });
+    setEditando(seleccionado?.id ?? indice);
+    setPantalla("formulario");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const eliminarNegocio = (indice) => {
-    const seleccionado =
-      negocios[indice];
-
-    const nombreMostrar =
-      seleccionado.nombreNegocio ||
-      seleccionado.responsable ||
-      seleccionado.nombre;
-
-    const confirmar =
-      window.confirm(
-        `¿Quieres eliminar a "${nombreMostrar}" del directorio?`
-      );
-
-    if (!confirmar) {
+  const eliminarNegocio = async (indice) => {
+    const seleccionado = negocios[indice];
+    if (!seleccionado?.id) {
+      alert("Este registro no tiene un ID de Supabase y no se puede eliminar desde aquí.");
       return;
     }
 
-    const nuevaLista =
-      negocios.filter(
-        (_, i) =>
-          i !== indice
-      );
+    const nombreMostrar = seleccionado.nombreNegocio || seleccionado.responsable || seleccionado.nombre;
+    const confirmar = window.confirm(`¿Quieres eliminar a "${nombreMostrar}" del directorio?`);
+    if (!confirmar) return;
 
-    guardarLista(
-      nuevaLista
-    );
+    const { error } = await supabase.from("negocios").delete().eq("id", seleccionado.id);
+    if (error) {
+      console.error(error);
+      alert("No se pudo eliminar el negocio de la nube.");
+      return;
+    }
+
+    await cargarNegocios();
+    alert(`"${nombreMostrar}" fue eliminado correctamente.`);
   };
 
   const volverMenu = () => {
     setPantalla("menu");
     setEditando(null);
     setTextoBuscar("");
-
-    setNegocio(
-      formularioVacio
-    );
+    setNegocio(formularioVacio);
   };
 
-  const negociosFiltrados =
-    negocios.filter(
-      (item) => {
-
-        const texto =
-          normalizar(
-            textoBuscar
-          );
-
-        if (!texto) {
-          return true;
-        }
-
-        const especialidades =
-          Array.isArray(
-            item.especialidades
-          )
-            ? item.especialidades
-            : [];
-
-        return (
-          normalizar(
-            item.nombreNegocio ||
-              ""
-          ).includes(texto) ||
-
-          normalizar(
-            item.responsable ||
-              item.nombre ||
-              ""
-          ).includes(texto) ||
-
-          normalizar(
-            item.especialidad ||
-              ""
-          ).includes(texto) ||
-
-          especialidades.some(
-            (especialidad) =>
-              normalizar(
-                especialidad
-              ).includes(texto)
-          ) ||
-
-          normalizar(
-            item.descripcion ||
-              ""
-          ).includes(texto) ||
-
-          normalizar(
-            item.barrio ||
-              ""
-          ).includes(texto) ||
-
-          normalizar(
-            item.grupo ||
-              ""
-          ).includes(texto)
-        );
-      }
+  const negociosFiltrados = negocios.filter((item) => {
+    const texto = normalizar(textoBuscar);
+    if (!texto) return true;
+    const especialidades = Array.isArray(item.especialidades) ? item.especialidades : [];
+    return (
+      normalizar(item.nombreNegocio).includes(texto) ||
+      normalizar(item.responsable || item.nombre).includes(texto) ||
+      normalizar(item.especialidad).includes(texto) ||
+      especialidades.some((especialidad) => normalizar(especialidad).includes(texto)) ||
+      normalizar(item.descripcion).includes(texto) ||
+      normalizar(item.barrio).includes(texto) ||
+      normalizar(item.grupo).includes(texto)
     );
+  });
 
-  const opcionesEspecialidad =
-    subcategorias[
-      negocio.grupo
-    ] || [];
+  const opcionesEspecialidad = subcategorias[negocio.grupo] || [];
 
   return (
     <div className="admin">
-
-      <h2>
-        Administrar negocios
-      </h2>
+      <h2>Administrar negocios</h2>
 
       {pantalla === "menu" && (
-
         <div className="admin-menu">
-
-          <p>
-            ¿Qué deseas hacer?
-          </p>
-
+          <p>¿Qué deseas hacer?</p>
           <div className="admin-opciones">
-
-            <button
-              type="button"
-              onClick={() =>
-                setPantalla(
-                  "lista"
-                )
-              }
-            >
-              📋 Ver negocios registrados
-            </button>
-
-            <button
-              type="button"
-              onClick={
-                nuevoNegocio
-              }
-            >
-              ➕ Registrar nuevo negocio
-            </button>
-
+            <button type="button" onClick={() => setPantalla("lista")}>📋 Ver negocios registrados</button>
+            <button type="button" onClick={nuevoNegocio}>➕ Registrar nuevo negocio</button>
           </div>
-
         </div>
       )}
 
       {pantalla === "lista" && (
-
         <div>
-
-          <button
-            type="button"
-            onClick={
-              volverMenu
-            }
-          >
-            ← Volver
+          <button type="button" onClick={volverMenu}>← Volver</button>
+          <h3>Negocios registrados</h3>
+          <button type="button" onClick={cargarNegocios} disabled={cargando}>
+            {cargando ? "🔄 Cargando..." : "🔄 Actualizar lista"}
           </button>
+          <input type="text" value={textoBuscar} onChange={(e) => setTextoBuscar(e.target.value)} placeholder="🔎 Buscar por nombre, servicio o barrio" />
+          <p>{negociosFiltrados.length} negocio(s)</p>
 
-          <h3>
-            Negocios registrados
-          </h3>
-
-          <input
-            type="text"
-            value={
-              textoBuscar
-            }
-            onChange={(e) =>
-              setTextoBuscar(
-                e.target.value
-              )
-            }
-            placeholder="🔎 Buscar por nombre, servicio o barrio"
-          />
-
-          <p>
-            {
-              negociosFiltrados.length
-            }{" "}
-            negocio(s)
-          </p>
-
-          {negociosFiltrados.length ===
-          0 ? (
-
-            <p>
-              No encontramos negocios.
-            </p>
-
+          {cargando ? (
+            <p>Cargando negocios desde la nube...</p>
+          ) : negociosFiltrados.length === 0 ? (
+            <p>No encontramos negocios.</p>
           ) : (
-
-            negociosFiltrados.map(
-              (item) => {
-
-                const indice =
-                  negocios.indexOf(
-                    item
-                  );
-
-                const nombreMostrar =
-                  item.nombreNegocio ||
-                  item.responsable ||
-                  item.nombre;
-
-                const responsableMostrar =
-                  item.responsable ||
-                  item.nombre;
-
-                return (
-
-                  <div
-                    className="admin-negocio"
-                    key={indice}
-                  >
-
-                    <strong>
-                      {nombreMostrar}
-                    </strong>
-
-                    {item.nombreNegocio && (
-
-                      <p>
-                        👤 Responsable:{" "}
-                        {
-                          responsableMostrar
-                        }
-                      </p>
-
-                    )}
-
-                    <p>
-                      📂{" "}
-                      {item.grupo}
-                    </p>
-
-                    <p>
-                      🔧{" "}
-                      {
-                        Array.isArray(
-                          item.especialidades
-                        )
-                          ? item.especialidades
-                              .filter(
-                                (especialidad) =>
-                                  especialidad !==
-                                  "Otro"
-                              )
-                              .join(", ")
-                          : item.especialidad
-                      }
-                    </p>
-
-                    {item.otroEspecialidad && (
-                      <p>
-                        ✏️ Otro:{" "}
-                        {
-                          item.otroEspecialidad
-                        }
-                      </p>
-                    )}
-
-                    <p>
-                      📍{" "}
-                      {item.barrio}
-                    </p>
-
-                    <div className="admin-acciones">
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          editarNegocio(
-                            indice
-                          )
-                        }
-                      >
-                        ✏️ Editar
-                      </button>
-
-                      <button
-                        type="button"
-                        className="boton-eliminar"
-                        onClick={() =>
-                          eliminarNegocio(
-                            indice
-                          )
-                        }
-                      >
-                        🗑️ Eliminar
-                      </button>
-
-                    </div>
-
+            negociosFiltrados.map((item, indice) => {
+              const indiceReal = negocios.indexOf(item);
+              const nombreMostrar = item.nombreNegocio || item.responsable || item.nombre;
+              const responsableMostrar = item.responsable || item.nombre;
+              return (
+                <div className="admin-negocio" key={item.id ?? indice}>
+                  <strong>{nombreMostrar}</strong>
+                  {item.nombreNegocio && <p>👤 Responsable: {responsableMostrar}</p>}
+                  <p>📂 {item.grupo}</p>
+                  <p>🔧 {Array.isArray(item.especialidades) ? item.especialidades.filter((e) => e !== "Otro").join(", ") : item.especialidad}</p>
+                  {item.otroEspecialidad && <p>✏️ Otro: {item.otroEspecialidad}</p>}
+                  <p>📍 {item.barrio}</p>
+                  <div className="admin-acciones">
+                    <button type="button" onClick={() => editarNegocio(indiceReal)}>✏️ Editar</button>
+                    <button type="button" className="boton-eliminar" onClick={() => eliminarNegocio(indiceReal)}>🗑️ Eliminar</button>
                   </div>
-                );
-              }
-            )
+                </div>
+              );
+            })
           )}
-
         </div>
       )}
 
       {pantalla === "formulario" && (
-
         <div>
-
-          <button
-            type="button"
-            onClick={
-              volverMenu
-            }
-          >
-            ← Volver
-          </button>
-
+          <button type="button" onClick={volverMenu}>← Volver</button>
           {editando !== null && (
-
-            <div className="editando-aviso">
-
-              ✏️{" "}
-
-              <strong>
-                Editando:{" "}
-                {
-                  negocio.nombreNegocio ||
-                  negocio.responsable
-                }
-              </strong>
-
-            </div>
+            <div className="editando-aviso">✏️ <strong>Editando: {negocio.nombreNegocio || negocio.responsable}</strong></div>
           )}
+          <h3>{editando !== null ? "Editar negocio" : "Registrar nuevo negocio"}</h3>
 
-          <h3>
-            {editando !== null
-              ? "Editar negocio"
-              : "Registrar nuevo negocio"}
-          </h3>
+          <form onSubmit={guardarNegocio}>
+            <label>Nombre del negocio (si tiene)</label>
+            <input name="nombreNegocio" value={negocio.nombreNegocio} onChange={cambiarDato} placeholder="Ej: Sala de Belleza Marianne" />
 
-          <form
-            onSubmit={
-              guardarNegocio
-            }
-          >
+            <label>Nombre de la persona o responsable</label>
+            <input name="responsable" value={negocio.responsable} onChange={cambiarDato} placeholder="Ej: Marianne Gómez" required />
 
-            <label>
-              Nombre del negocio
-              (si tiene)
-            </label>
-
-            <input
-              name="nombreNegocio"
-              value={
-                negocio.nombreNegocio
-              }
-              onChange={
-                cambiarDato
-              }
-              placeholder="Ej: Sala de Belleza Marianne"
-            />
-
-            <label>
-              Nombre de la persona
-              o responsable
-            </label>
-
-            <input
-              name="responsable"
-              value={
-                negocio.responsable
-              }
-              onChange={
-                cambiarDato
-              }
-              placeholder="Ej: Marianne Gómez"
-              required
-            />
-
-            <label>
-              Categoría
-            </label>
-
-            <select
-              name="grupo"
-              value={
-                negocio.grupo
-              }
-              onChange={
-                cambiarDato
-              }
-            >
-
-              <option value="Técnicos">
-                Técnicos y reparaciones
-              </option>
-
-              <option value="Hogar">
-                Hogar, cuidado y oficios
-              </option>
-
-              <option value="Restaurantes">
-                Comidas y bebidas
-              </option>
-
-              <option value="Belleza">
-                Belleza y bienestar
-              </option>
-
-              <option value="Tienda">
-                Comercio / Tiendas
-              </option>
-
-              <option value="Moda">
-                Moda, ropa y calzado
-              </option>
-
-              <option value="Profesionales">
-                Profesionales
-              </option>
-
-              <option value="Costura">
-                Confección y arreglos
-              </option>
-
-              <option value="Transporte">
-                Transporte y domicilios
-              </option>
-
+            <label>Categoría</label>
+            <select name="grupo" value={negocio.grupo} onChange={cambiarDato}>
+              <option value="Técnicos">Técnicos y reparaciones</option>
+              <option value="Hogar">Hogar, cuidado y oficios</option>
+              <option value="Restaurantes">Comidas y bebidas</option>
+              <option value="Belleza">Belleza y bienestar</option>
+              <option value="Tienda">Comercio / Tiendas</option>
+              <option value="Moda">Moda, ropa y calzado</option>
+              <option value="Profesionales">Profesionales</option>
+              <option value="Costura">Confección y arreglos</option>
+              <option value="Transporte">Transporte y domicilios</option>
             </select>
 
-            <label>
-              Especialidades
-            </label>
-
-            <p className="ayuda-horario">
-              Selecciona una o varias opciones.
-            </p>
-
-            <div
-              className="especialidades-belleza"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-start",
-                width: "100%",
-                textAlign: "left"
-              }}
-            >
-
-              {opcionesEspecialidad.map(
-                (especialidad) => (
-
-                 <label
-  key={especialidad}
-  className="opcion-especialidad"
-  style={{
-    display: "grid",
-    gridTemplateColumns: "22px minmax(0, 1fr)",
-    alignItems: "center",
-    columnGap: "8px",
-    width: "100%",
-    maxWidth: "100%",
-    boxSizing: "border-box",
-    marginBottom: "8px",
-    padding: "0",
-    textAlign: "left",
-    cursor: "pointer"
-  }}
->
-  <input
-    type="checkbox"
-    checked={negocio.especialidades.includes(
-      especialidad
-    )}
-    onChange={() =>
-      cambiarEspecialidad(
-        especialidad
-      )
-    }
-    style={{
-      margin: 0,
-      width: "16px",
-      height: "16px"
-    }}
-  />
-
-  <span
-    style={{
-      display: "block",
-      width: "100%",
-      minWidth: 0,
-      margin: 0,
-      padding: 0,
-      textAlign: "left",
-      overflowWrap: "break-word"
-    }}
-  >
-    {especialidad}
-  </span>
-</label>
-
-                )
-              )}
-
+            <label>Especialidades</label>
+            <p className="ayuda-horario">Selecciona una o varias opciones.</p>
+            <div className="especialidades-belleza" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%", textAlign: "left" }}>
+              {opcionesEspecialidad.map((especialidad) => (
+                <label key={especialidad} className="opcion-especialidad" style={{ display: "grid", gridTemplateColumns: "22px minmax(0, 1fr)", alignItems: "center", columnGap: "8px", width: "100%", maxWidth: "100%", boxSizing: "border-box", marginBottom: "8px", padding: 0, textAlign: "left", cursor: "pointer" }}>
+                  <input type="checkbox" checked={negocio.especialidades.includes(especialidad)} onChange={() => cambiarEspecialidad(especialidad)} style={{ margin: 0, width: "16px", height: "16px" }} />
+                  <span style={{ display: "block", width: "100%", minWidth: 0, margin: 0, padding: 0, textAlign: "left", overflowWrap: "break-word" }}>{especialidad}</span>
+                </label>
+              ))}
             </div>
 
-            {negocio.especialidades.includes(
-              "Otro"
-            ) && (
-
+            {negocio.especialidades.includes("Otro") && (
               <>
-
-                <label>
-                  ¿Cuál otro servicio?
-                </label>
-
-                <input
-                  name="otroEspecialidad"
-                  value={
-                    negocio.otroEspecialidad
-                  }
-                  onChange={
-                    cambiarDato
-                  }
-                  placeholder="Escribe aquí el servicio"
-                  required
-                />
-
+                <label>¿Cuál otro servicio?</label>
+                <input name="otroEspecialidad" value={negocio.otroEspecialidad} onChange={cambiarDato} placeholder="Escribe aquí el servicio" required />
               </>
             )}
 
-            <label>
-              Descripción
-            </label>
+            <label>Descripción</label>
+            <textarea name="descripcion" value={negocio.descripcion} onChange={cambiarDato} placeholder="Describe brevemente los servicios que ofrece" />
+            <p className="ayuda-horario">Aquí puedes escribir detalles. Por ejemplo: tintes, balayage, keratina, uñas, maquillaje, reparaciones específicas, tipos de comida, etc.</p>
 
-            <textarea
-              name="descripcion"
-              value={
-                negocio.descripcion
-              }
-              onChange={
-                cambiarDato
-              }
-              placeholder="Describe brevemente los servicios que ofrece"
-            />
+            <label>Barrio</label>
+            <input name="barrio" value={negocio.barrio} onChange={cambiarDato} placeholder="Ej: El Rocío" required />
 
-            <p className="ayuda-horario">
-              Aquí puedes escribir detalles.
-              Por ejemplo: tintes, balayage,
-              keratina, uñas, maquillaje,
-              reparaciones específicas,
-              tipos de comida, etc.
-            </p>
-
-            <label>
-              Barrio
-            </label>
-
-            <input
-              name="barrio"
-              value={
-                negocio.barrio
-              }
-              onChange={
-                cambiarDato
-              }
-              placeholder="Ej: El Rocío"
-              required
-            />
-
-            <label>
-              Tipo de atención
-            </label>
-
-            <select
-              name="tipoAtencion"
-              value={
-                negocio.tipoAtencion
-              }
-              onChange={
-                cambiarDato
-              }
-            >
-
-              <option>
-                Domicilio
-              </option>
-
-              <option>
-                Local
-              </option>
-
-              <option>
-                Local y domicilio
-              </option>
-
+            <label>Tipo de atención</label>
+            <select name="tipoAtencion" value={negocio.tipoAtencion} onChange={cambiarDato}>
+              <option>Domicilio</option><option>Local</option><option>Local y domicilio</option>
             </select>
 
-            <label>
-              Dirección
-            </label>
+            <label>Dirección</label>
+            <input name="direccion" value={negocio.direccion} onChange={cambiarDato} placeholder="Solo si tiene local" />
 
-            <input
-              name="direccion"
-              value={
-                negocio.direccion
-              }
-              onChange={
-                cambiarDato
-              }
-              placeholder="Solo si tiene local"
-            />
+            <label>Teléfono / WhatsApp</label>
+            <input name="telefono" value={negocio.telefono} onChange={cambiarDato} placeholder="Ej: 3156206209" required />
 
-            <label>
-              Teléfono / WhatsApp
-            </label>
+            <h3>Horarios</h3>
+            <label>Lunes a viernes</label>
+            <input name="lunesViernes" value={negocio.lunesViernes} onChange={cambiarDato} placeholder="08:00-12:00, 14:00-18:00" />
+            <label>Sábado</label>
+            <input name="sabado" value={negocio.sabado} onChange={cambiarDato} placeholder="08:00-13:00" />
+            <label>Domingo</label>
+            <input name="domingo" value={negocio.domingo} onChange={cambiarDato} placeholder="No atiende" />
+            <label>Festivos</label>
+            <select name="festivos" value={negocio.festivos} onChange={cambiarDato}><option>No atiende</option><option>Atiende</option></select>
 
-            <input
-              name="telefono"
-              value={
-                negocio.telefono
-              }
-              onChange={
-                cambiarDato
-              }
-              placeholder="Ej: 3156206209"
-              required
-            />
-
-            <h3>
-              Horarios
-            </h3>
-
-            <label>
-              Lunes a viernes
-            </label>
-
-            <input
-              name="lunesViernes"
-              value={
-                negocio.lunesViernes
-              }
-              onChange={
-                cambiarDato
-              }
-              placeholder="08:00-12:00, 14:00-18:00"
-            />
-
-            <label>
-              Sábado
-            </label>
-
-            <input
-              name="sabado"
-              value={
-                negocio.sabado
-              }
-              onChange={
-                cambiarDato
-              }
-              placeholder="08:00-13:00"
-            />
-
-            <label>
-              Domingo
-            </label>
-
-            <input
-              name="domingo"
-              value={
-                negocio.domingo
-              }
-              onChange={
-                cambiarDato
-              }
-              placeholder="No atiende"
-            />
-
-            <label>
-              Festivos
-            </label>
-
-            <select
-              name="festivos"
-              value={
-                negocio.festivos
-              }
-              onChange={
-                cambiarDato
-              }
-            >
-
-              <option>
-                No atiende
-              </option>
-
-              <option>
-                Atiende
-              </option>
-
-            </select>
-
-            {negocio.festivos ===
-              "Atiende" && (
-
+            {negocio.festivos === "Atiende" && (
               <>
-
-                <label>
-                  Horario en festivos
-                </label>
-
-                <input
-                  name="horarioFestivos"
-                  value={
-                    negocio.horarioFestivos
-                  }
-                  onChange={
-                    cambiarDato
-                  }
-                  placeholder="Ej: 09:00-13:00"
-                />
-
-                <p className="ayuda-horario">
-                  Puedes escribir uno o dos horarios.
-                  Ejemplo: 08:00-12:00,
-                  14:00-18:00
-                </p>
-
+                <label>Horario en festivos</label>
+                <input name="horarioFestivos" value={negocio.horarioFestivos} onChange={cambiarDato} placeholder="Ej: 09:00-13:00" />
+                <p className="ayuda-horario">Puedes escribir uno o dos horarios. Ejemplo: 08:00-12:00, 14:00-18:00</p>
               </>
             )}
 
-            <button
-              type="submit"
-            >
-              {editando !== null
-                ? "💾 Guardar cambios"
-                : "💾 Guardar negocio"}
-            </button>
-
-            {editando !== null && (
-
-              <button
-                type="button"
-                className="boton-cancelar"
-                onClick={
-                  volverMenu
-                }
-              >
-                Cancelar edición
-              </button>
-
-            )}
-
+            <button type="submit">{editando !== null ? "💾 Guardar cambios" : "💾 Guardar negocio"}</button>
+            {editando !== null && <button type="button" className="boton-cancelar" onClick={volverMenu}>Cancelar edición</button>}
           </form>
-
         </div>
       )}
-
     </div>
   );
 }
