@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import negociosIniciales from "../data/negocios";
 
@@ -175,24 +175,39 @@ function prepararNegocio(item) {
   const otroEspecialidad = item.otroEspecialidad ?? item.otro_especialidad ?? "";
   const tipoAtencion = item.tipoAtencion ?? item.tipo_atencion ?? "Domicilio";
   const direccion = item.direccion ?? "";
-  const telefono = item.telefono ?? "";
+  const telefono =
+    item.telefono ??
+    item.celular ??
+    item.whatsapp ??
+    item.telefono_whatsapp ??
+    "";
   const descripcion = item.descripcion ?? "";
   const barrio = item.barrio ?? "";
 
   const lunes =
-    horarioTexto(horario, "lunes");
+    horarioTexto(horario, "lunes") ||
+    item.lunes_viernes ||
+    "";
 
   const martes =
-    horarioTexto(horario, "martes");
+    horarioTexto(horario, "martes") ||
+    item.lunes_viernes ||
+    "";
 
   const miercoles =
-    horarioTexto(horario, "miercoles");
+    horarioTexto(horario, "miercoles") ||
+    item.lunes_viernes ||
+    "";
 
   const jueves =
-    horarioTexto(horario, "jueves");
+    horarioTexto(horario, "jueves") ||
+    item.lunes_viernes ||
+    "";
 
   const viernes =
-    horarioTexto(horario, "viernes");
+    horarioTexto(horario, "viernes") ||
+    item.lunes_viernes ||
+    "";
 
   let lunesViernes = "";
 
@@ -208,7 +223,7 @@ function prepararNegocio(item) {
     lunesViernes = lunes || "";
   }
 
-  let horarioFestivos = "";
+  let horarioFestivos = item.horario_festivos ?? "";
 
   if (Array.isArray(item.festivos)) {
     horarioFestivos = item.festivos
@@ -313,7 +328,7 @@ function prepararNegocio(item) {
 
     direccion,
 
-    telefono:
+    telefono,
 
     lunesViernes,
 
@@ -321,21 +336,42 @@ function prepararNegocio(item) {
       horarioTexto(
         horario,
         "sabado"
-      ),
+      ) || item.sabado || "",
 
     domingo:
       horarioTexto(
         horario,
         "domingo"
-      ),
+      ) || item.domingo || "",
 
     festivos:
       estadoFestivos,
 
-    horarioFestivos
+    horarioFestivos,
+
+    // IMPORTANTE: conservar el objeto horario original.
+    // Al editar, el registro seleccionado vuelve a pasar por
+    // prepararNegocio; si no conservamos horario aquí, se pierde
+    // después de la primera carga.
+    horario: horario,
   };
 }
 function filaSupabaseANegocio(item) {
+  const horarioBase = item.horario || {};
+
+  // Supabase guarda los horarios también en columnas directas.
+  // Los incorporamos al objeto horario para recuperarlos al editar.
+  const horarioCompleto = {
+    ...horarioBase,
+    lunes: item.lunes_viernes ?? horarioBase.lunes ?? "",
+    martes: item.lunes_viernes ?? horarioBase.martes ?? "",
+    miercoles: item.lunes_viernes ?? horarioBase.miercoles ?? "",
+    jueves: item.lunes_viernes ?? horarioBase.jueves ?? "",
+    viernes: item.lunes_viernes ?? horarioBase.viernes ?? "",
+    sabado: item.sabado ?? horarioBase.sabado ?? "",
+    domingo: item.domingo ?? horarioBase.domingo ?? "",
+  };
+
   return prepararNegocio({
     id: item.id,
     nombre_negocio: item.nombre_negocio,
@@ -348,11 +384,9 @@ function filaSupabaseANegocio(item) {
     tipo_atencion: item.tipo_atencion,
     direccion: item.direccion,
     telefono: item.telefono,
-    horario: item.horario || {},
-    festivos:
-      item.festivos_data ||
-      item.festivos ||
-      "No atiende",
+    horario: horarioCompleto,
+    festivos: item.festivos_data || item.festivos || "No atiende",
+    horario_festivos: item.horario_festivos || "",
   });
 }
 
@@ -410,8 +444,18 @@ function Admin() {
   const [negocio, setNegocio] = useState(formularioVacio);
   const [cargando, setCargando] = useState(true);
 
-  const cargarNegocios = async () => {
-    setCargando(true);
+  // Evita que dos consultas de sincronización se ejecuten al mismo tiempo.
+  const cargandoRef = useRef(false);
+
+  const cargarNegocios = async (mostrarCarga = true) => {
+    if (cargandoRef.current) return false;
+
+    cargandoRef.current = true;
+
+    if (mostrarCarga) {
+      setCargando(true);
+    }
+
     const { data, error } = await supabase
       .from("negocios")
       .select("*")
@@ -419,18 +463,60 @@ function Admin() {
 
     if (error) {
       console.error("Error al cargar negocios desde Supabase:", error);
-      alert("No se pudieron cargar los negocios desde la nube.");
-      setCargando(false);
+      if (mostrarCarga) {
+        alert("No se pudieron cargar los negocios desde la nube.");
+      }
+      if (mostrarCarga) {
+        setCargando(false);
+      }
+      cargandoRef.current = false;
       return false;
     }
 
     setNegocios((data || []).map(filaSupabaseANegocio));
-    setCargando(false);
+
+    if (mostrarCarga) {
+      setCargando(false);
+    }
+
+    cargandoRef.current = false;
     return true;
   };
 
   useEffect(() => {
-    cargarNegocios();
+    // Carga inicial desde Supabase.
+    cargarNegocios(true);
+
+    // Sincronización en tiempo real cuando Supabase Realtime está disponible.
+    const canal = supabase
+      .channel("negocios-admin-sync")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "negocios"
+        },
+        () => {
+          cargarNegocios(false);
+        }
+      )
+      .subscribe();
+
+    // Respaldo: aunque Realtime no esté habilitado en Supabase,
+    // cada dispositivo vuelve a consultar la nube cada 5 segundos.
+    // Así una edición, registro o eliminación hecha en PC aparece
+    // también en el celular y viceversa.
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        cargarNegocios(false);
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(intervalo);
+      supabase.removeChannel(canal);
+    };
   }, []);
 
   const cambiarDato = (e) => {
@@ -521,9 +607,25 @@ function Admin() {
 
   const editarNegocio = (indice) => {
     const seleccionado = negocios[indice];
+    const datosPreparados = prepararNegocio(seleccionado);
+
+    // Cargamos el teléfono directamente del registro que viene de Supabase.
+    // Así evitamos que se pierda al pasar por la preparación del formulario.
+    const telefonoSeleccionado =
+      seleccionado?.telefono ??
+      seleccionado?.celular ??
+      seleccionado?.whatsapp ??
+      seleccionado?.telefono_whatsapp ??
+      datosPreparados.telefono ??
+      "";
+
     setNegocio({
       ...formularioVacio,
-      ...prepararNegocio(seleccionado),
+      ...datosPreparados,
+      telefono: String(telefonoSeleccionado),
+      especialidades: Array.isArray(datosPreparados.especialidades)
+        ? datosPreparados.especialidades
+        : [],
       id: seleccionado?.id ?? null,
     });
     setEditando(seleccionado?.id ?? indice);
@@ -575,7 +677,16 @@ function Admin() {
     );
   });
 
-  const opcionesEspecialidad = subcategorias[negocio.grupo] || [];
+  const opcionesBaseEspecialidad = subcategorias[negocio.grupo] || [];
+
+  // Conservamos visibles las especialidades que ya tiene el registro,
+  // aunque sean de una versión anterior del catálogo.
+  // Así no se "pierden" visualmente al editar un registro antiguo.
+  const opcionesEspecialidad = [
+    ...opcionesBaseEspecialidad,
+    ...(Array.isArray(negocio.especialidades) ? negocio.especialidades : [])
+      .filter((especialidad) => !opcionesBaseEspecialidad.includes(especialidad))
+  ];
 
   return (
     <div className="admin">
