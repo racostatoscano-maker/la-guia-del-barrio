@@ -121,19 +121,124 @@ function convertirHorario(texto) {
     return null;
   }
 
-  const horarios = String(texto)
-    .split(",")
-    .map((parte) => {
-      const horas = parte.trim().split("-");
+  function convertirHora(valor, periodoReferencia = null) {
+    const textoHora = String(valor || "")
+      .trim()
+      .toLowerCase();
 
-      if (horas.length !== 2) {
+    if (!textoHora) return null;
+
+    const tieneAm =
+      textoHora.includes("am") ||
+      textoHora.includes("a. m");
+
+    const tienePm =
+      textoHora.includes("pm") ||
+      textoHora.includes("p. m");
+
+    const limpio = textoHora
+      .replace(/a\.?\s*m\.?/g, "")
+      .replace(/p\.?\s*m\.?/g, "")
+      .trim();
+
+    const partes = limpio.split(":");
+
+    let hora = Number(partes[0]);
+    const minutos = partes.length > 1
+      ? Number(partes[1])
+      : 0;
+
+    if (
+      !Number.isFinite(hora) ||
+      !Number.isFinite(minutos) ||
+      minutos < 0 ||
+      minutos > 59
+    ) {
+      return null;
+    }
+
+    // AM/PM escrito explícitamente
+    if (tienePm && hora < 12) {
+      hora += 12;
+    }
+
+    if (tieneAm && hora === 12) {
+      hora = 0;
+    }
+
+    // Sin AM/PM:
+    // 13-23 = horario de 24 horas
+    // 7-11 = mañana
+    // 12 = mediodía
+    // 1-6 = tarde
+    if (!tieneAm && !tienePm && hora <= 12) {
+      if (periodoReferencia === "pm" && hora < 12) {
+        hora += 12;
+      } else if (
+        periodoReferencia === null &&
+        hora >= 1 &&
+        hora <= 6
+      ) {
+        hora += 12;
+      }
+    }
+
+    if (hora < 0 || hora > 23) {
+      return null;
+    }
+
+    return `${String(hora).padStart(2, "0")}:${String(minutos).padStart(2, "0")}`;
+  }
+
+  const partesHorario = String(texto)
+    .replace(/\s+a\s+/gi, "-")
+    .split(/\s+y\s+|,/i)
+    .map((parte) => parte.trim())
+    .filter(Boolean);
+
+  const horarios = partesHorario
+    .map((parte) => {
+      const partes = parte.split(/\s*-\s*/);
+
+      if (partes.length !== 2) {
         return null;
       }
 
-      return [
-        horas[0].trim(),
-        horas[1].trim()
-      ];
+      const textoInicio = partes[0].trim();
+      const textoFin = partes[1].trim();
+
+      // Obtenemos solamente la hora para determinar
+      // si el rango corto corresponde a la tarde.
+      const numeroInicio = Number(
+        textoInicio.split(":")[0]
+      );
+
+      let periodoInicio = null;
+
+      if (
+        !textoInicio.includes(":") &&
+        Number.isFinite(numeroInicio) &&
+        numeroInicio >= 1 &&
+        numeroInicio <= 6
+      ) {
+        periodoInicio = "pm";
+      }
+
+      const inicio = convertirHora(
+        textoInicio,
+        periodoInicio
+      );
+
+      const fin = convertirHora(
+        textoFin,
+        periodoInicio
+      );
+
+      if (!inicio || !fin) {
+        return null;
+      }
+
+      return [inicio, fin];
     })
     .filter(Boolean);
 
@@ -141,7 +246,6 @@ function convertirHorario(texto) {
     ? horarios
     : null;
 }
-
 function horarioTexto(horario, dia) {
   if (!horario || !horario[dia]) {
     return "";
@@ -223,61 +327,58 @@ function prepararNegocio(item) {
     lunesViernes = lunes || "";
   }
 
-  let horarioFestivos = item.horario_festivos ?? "";
+   
+  let horarioFestivos =
+    item.horarioFestivos ??
+    item.horario_festivos ??
+    "";
 
-  if (Array.isArray(item.festivos)) {
+
+  // Conserva primero el horario_festivos de la columna directa.
+  // Solo usamos el horario anidado como respaldo si trae intervalos reales.
+  if (
+    Array.isArray(item.festivos) &&
+    item.festivos.length > 0
+  ) {
     horarioFestivos = item.festivos
-      .map(
-        ([inicio, fin]) =>
-          `${inicio}-${fin}`
-      )
+      .map(([inicio, fin]) => `${inicio}-${fin}`)
       .join(", ");
   } else if (
     item.festivos &&
     typeof item.festivos === "object" &&
-    Array.isArray(item.festivos.horario)
+    Array.isArray(item.festivos.horario) &&
+    item.festivos.horario.length > 0
   ) {
-    horarioFestivos =
-      item.festivos.horario
-        .map(
-          ([inicio, fin]) =>
-            `${inicio}-${fin}`
-        )
-        .join(", ");
+    horarioFestivos = item.festivos.horario
+      .map(([inicio, fin]) => `${inicio}-${fin}`)
+      .join(", ");
   } else if (
-    horario.festivos &&
-    Array.isArray(horario.festivos)
+    Array.isArray(horario.festivos) &&
+    horario.festivos.length > 0
   ) {
-    horarioFestivos =
-      horario.festivos
-        .map(
-          ([inicio, fin]) =>
-            `${inicio}-${fin}`
-        )
-        .join(", ");
+    horarioFestivos = horario.festivos
+      .map(([inicio, fin]) => `${inicio}-${fin}`)
+      .join(", ");
   }
 
   let estadoFestivos = "No atiende";
 
   if (item.festivos === "Atiende") {
     estadoFestivos = "Atiende";
-  }
-
-  if (Array.isArray(item.festivos)) {
+  } else if (
+    Array.isArray(item.festivos) &&
+    item.festivos.length > 0
+  ) {
     estadoFestivos = "Atiende";
-  }
-
-  if (
+  } else if (
     item.festivos &&
     typeof item.festivos === "object" &&
     item.festivos.atiende
   ) {
     estadoFestivos = "Atiende";
-  }
-
-  if (
-    horario.festivos &&
-    Array.isArray(horario.festivos)
+  } else if (
+    Array.isArray(horario.festivos) &&
+    horario.festivos.length > 0
   ) {
     estadoFestivos = "Atiende";
   }
