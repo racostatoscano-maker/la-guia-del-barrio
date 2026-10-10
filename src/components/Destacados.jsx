@@ -199,46 +199,117 @@ const iconosGrupo = {
    HORARIOS
 ===================================================== */
 
-function convertirHorarioSeguro(horario) {
-  if (!horario) return null;
 
-  if (Array.isArray(horario)) {
-    return horario;
+
+function convertirHorarioSeguro(horario) {
+  if (horario == null || horario === "") {
+    return null;
   }
 
-  if (typeof horario === "string") {
-    const texto = horario.trim();
+  // Si Supabase ya entrega los turnos como pares [inicio, fin],
+  // conservamos ese formato.
+  if (Array.isArray(horario)) {
+    const pares = horario
+      .filter((turno) => Array.isArray(turno) && turno.length >= 2)
+      .map(([inicio, fin]) => [
+        convertirHora24(inicio),
+        convertirHora24(fin)
+      ])
+      .filter(([inicio, fin]) => inicio !== null && fin !== null);
+
+    return pares.length > 0 ? pares : null;
+  }
+
+  if (typeof horario !== "string") {
+    return null;
+  }
+
+  const texto = horario.trim();
+
+  if (
+    !texto ||
+    normalizar(texto).includes("no atiende")
+  ) {
+    return null;
+  }
+
+  // Acepta formatos como 8-21, 08:00-19:00 y 9 a 12 y 2 a 5.
+  const expresion =
+    /(\d{1,2})(?::(\d{2}))?\s*(?:a|[-–—])\s*(\d{1,2})(?::(\d{2}))?/gi;
+
+  const coincidencias = [...texto.matchAll(expresion)];
+
+  if (coincidencias.length === 0) {
+    return null;
+  }
+
+  const horarios = [];
+  let finAnterior = null;
+
+  for (const coincidencia of coincidencias) {
+    let inicio = Number(coincidencia[1]);
+    const minutoInicio = Number(coincidencia[2] || 0);
+    let fin = Number(coincidencia[3]);
+    const minutoFin = Number(coincidencia[4] || 0);
 
     if (
-      !texto ||
-      normalizar(texto).includes("no atiende")
+      inicio > 23 ||
+      fin > 23 ||
+      minutoInicio > 59 ||
+      minutoFin > 59
     ) {
-      return null;
+      continue;
     }
 
-    const horarios = texto
-      .split(",")
-      .map((parte) => {
-        const horas =
-          parte.trim().split("-");
+    // En un horario dividido, el segundo turno suele ser por la tarde:
+    // "9 a 12 y 2 a 5" se interpreta como 09:00-12:00 y 14:00-17:00.
+    if (
+      finAnterior !== null &&
+      inicio < 12 &&
+      finAnterior >= 12
+    ) {
+      inicio += 12;
+    }
 
-        if (horas.length !== 2) {
-          return null;
-        }
+    if (fin < inicio) {
+      fin += 12;
+    }
 
-        return [
-          horas[0].trim(),
-          horas[1].trim()
-        ];
-      })
-      .filter(Boolean);
+    if (inicio > 23 || fin > 24) {
+      continue;
+    }
 
-    return horarios.length > 0
-      ? horarios
-      : null;
+    horarios.push([
+      `${String(inicio).padStart(2, "0")}:${String(minutoInicio).padStart(2, "0")}`,
+      `${String(fin).padStart(2, "0")}:${String(minutoFin).padStart(2, "0")}`
+    ]);
+
+    finAnterior = fin;
   }
 
-  return null;
+  return horarios.length > 0 ? horarios : null;
+}
+
+function convertirHora24(hora) {
+  if (hora == null || hora === "") {
+    return null;
+  }
+
+  const texto = String(hora).trim();
+  const coincidencia = texto.match(/^(\d{1,2})(?::(\d{2}))?$/);
+
+  if (!coincidencia) {
+    return null;
+  }
+
+  const horas = Number(coincidencia[1]);
+  const minutos = Number(coincidencia[2] || 0);
+
+  if (horas > 24 || minutos > 59 || (horas === 24 && minutos !== 0)) {
+    return null;
+  }
+
+  return `${String(horas).padStart(2, "0")}:${String(minutos).padStart(2, "0")}`;
 }
 
 function formatoHora(hora) {
@@ -306,7 +377,7 @@ function obtenerFestivos(negocio) {
   if (festivos === "Atiende") {
     return {
       atiende: true,
-      horario: null
+      horario: textoHorario(negocio.horarioFestivos)
     };
   }
 
@@ -610,8 +681,16 @@ function Destacados({
           telefono:
             item.telefono || "",
 
-          horario:
-            item.horario || {},
+          horario: {
+  ...(item.horario || {}),
+  lunes: item.horario?.lunes || item.lunes_viernes || "",
+  martes: item.horario?.martes || item.lunes_viernes || "",
+  miercoles: item.horario?.miercoles || item.lunes_viernes || "",
+  jueves: item.horario?.jueves || item.lunes_viernes || "",
+  viernes: item.horario?.viernes || item.lunes_viernes || "",
+  sabado: item.horario?.sabado || item.sabado || "",
+  domingo: item.horario?.domingo || item.domingo || "",
+},
 
           festivos:
             item.festivos_data ||
